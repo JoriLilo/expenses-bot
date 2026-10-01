@@ -38,3 +38,10 @@ def total_since(conn, since):
     )
     row = cursor.fetchone()
     return row["total"] if row["total"] is not None else 0
+
+def totals_by_category_since(conn, since):
+    cursor = conn.execute(
+        "SELECT category, SUM(amount) as total FROM expenses WHERE created_at >= ? GROUP BY category ORDER BY total DESC",
+        (since.isoformat(),)
+    )
+    return {row["category"]: row["total"] for row in cursor.fetchall()}

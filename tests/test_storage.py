@@ -40,3 +40,22 @@ def test_default_timestamp_is_now():
     before = datetime.now(timezone.utc) - timedelta(minutes=1)
     storage.add_expense(conn, "coffee", 150, "other")
     assert storage.total_since(conn, before) == 150
+    
+
+def test_totals_by_category_since():
+    conn = storage.connect(":memory:")
+    now = datetime.now(timezone.utc)
+    storage.add_expense(conn, "lunch", 600, "food", created_at=now)
+    storage.add_expense(conn, "coffee", 150, "food", created_at=now)
+    storage.add_expense(conn, "bus", 40, "transport", created_at=now)
+    storage.add_expense(conn, "old", 999, "food", created_at=now - timedelta(days=10))
+
+    result = storage.totals_by_category_since(conn, now - timedelta(days=1))
+
+    assert result == {"food": 750, "transport": 40}
+
+
+def test_totals_by_category_empty():
+    conn = storage.connect(":memory:")
+    now = datetime.now(timezone.utc)
+    assert storage.totals_by_category_since(conn, now) == {}
