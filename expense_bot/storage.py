@@ -45,3 +45,15 @@ def totals_by_category_since(conn, since):
         (since.isoformat(),)
     )
     return {row["category"]: row["total"] for row in cursor.fetchall()}
+
+def delete_last(conn):
+    
+    cursor = conn.execute("SELECT * FROM expenses ORDER BY id DESC LIMIT 1")
+    row = cursor.fetchone()
+    if not row:
+        return None
+    conn.execute("DELETE FROM expenses WHERE id = ?", (row["id"],))
+
+    conn.commit()
+
+    return row

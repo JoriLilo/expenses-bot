@@ -40,7 +40,7 @@ def test_default_timestamp_is_now():
     before = datetime.now(timezone.utc) - timedelta(minutes=1)
     storage.add_expense(conn, "coffee", 150, "other")
     assert storage.total_since(conn, before) == 150
-    
+
 
 def test_totals_by_category_since():
     conn = storage.connect(":memory:")
@@ -59,3 +59,32 @@ def test_totals_by_category_empty():
     conn = storage.connect(":memory:")
     now = datetime.now(timezone.utc)
     assert storage.totals_by_category_since(conn, now) == {}
+
+
+def test_totals_by_category_ordered_largest_first():
+    conn = storage.connect(":memory:")
+    now = datetime.now(timezone.utc)
+    storage.add_expense(conn, "snack", 40, "food", created_at=now)
+    storage.add_expense(conn, "rent share", 600, "transport", created_at=now)
+
+    result = storage.totals_by_category_since(conn, now - timedelta(days=1))
+
+    assert list(result) == ["transport", "food"]
+
+
+def test_delete_last_removes_most_recent():
+    conn = storage.connect(":memory:")
+    storage.add_expense(conn, "a", 100, "other")
+    storage.add_expense(conn, "typo", 9999, "other")
+
+    removed = storage.delete_last(conn)
+
+    assert removed["item"] == "typo"
+    rows = storage.list_expenses(conn)
+    assert len(rows) == 1
+    assert rows[0]["item"] == "a"
+
+
+def test_delete_last_on_empty_returns_none():
+    conn = storage.connect(":memory:")
+    assert storage.delete_last(conn) is None    
