@@ -5,10 +5,14 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
 from . import handlers, storage
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 
 load_dotenv()
 ALLOWED_USER_ID = int(os.environ["ALLOWED_USER_ID"])
 DB_PATH = os.environ.get("DB_PATH", "expenses.db")
+TIRANA = ZoneInfo("Europe/Belgrade")
 
 
 def is_owner(update: Update) -> bool:
@@ -40,12 +44,25 @@ async def on_undo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(reply)
 
+async def on_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update) or update.message is None:
+        return
+
+    conn = storage.connect(DB_PATH)
+    try:
+        reply = handlers.today_message(conn, datetime.now(TIRANA))
+    finally:
+        conn.close()
+
+    await update.message.reply_text(reply)
+
 
 def main():
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     app = Application.builder().token(token).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     app.add_handler(CommandHandler("undo", on_undo))
+    app.add_handler(CommandHandler("today", on_today))
     app.run_polling()
 
 
