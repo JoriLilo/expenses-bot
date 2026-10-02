@@ -13,6 +13,7 @@ class ParseError(ValueError):
 
 
 def parse_expense(text):
+    text = text.strip().lower()
     tokens = text.split()
 
     positions = [i for i, word in enumerate(tokens) if looks_like_number(word)]

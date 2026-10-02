@@ -54,4 +54,9 @@ def test_decimal_raises_clear_message():
 
 def test_comma_raises_clear_message():
     with pytest.raises(ParseError, match="whole number"):
-        parse_expense("coffee 1,500")        
+        parse_expense("coffee 1,500")     
+
+def test_case_is_normalized():
+    p = parse_expense("Coffee 150 FOOD")
+    assert p.item == "coffee"
+    assert p.category == "food"   
