@@ -50,3 +50,18 @@ def looks_like_number(word):
     word = word.replace("-", "")
     word = word.replace("+", "")
     return word.isdecimal()
+
+def parse_amount(text, allow_zero=False):
+    text = text.strip()
+    if not text:
+        raise ParseError("No amount provided. Try 150")
+
+    if not text.isdecimal():
+        raise ParseError("Amount must be a whole number. Try 150")
+    amount = int(text)
+    if amount <= 0 and not allow_zero:
+        raise ParseError("Amount must be a positive number.")
+    if amount == 0 and not allow_zero:
+        raise ParseError("Amount must be a positive number.")
+
+    return amount

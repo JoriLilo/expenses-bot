@@ -1,5 +1,5 @@
 import pytest
-from expense_bot.parser import ParseError, parse_expense
+from expense_bot.parser import ParseError, parse_amount, parse_expense
 
 def test_basic():
     p = parse_expense("coffee 150")
@@ -60,3 +60,36 @@ def test_case_is_normalized():
     p = parse_expense("Coffee 150 FOOD")
     assert p.item == "coffee"
     assert p.category == "food"   
+
+
+def test_parse_amount_basic():
+    assert parse_amount("4200") == 4200
+
+
+def test_parse_amount_strips_whitespace():
+    assert parse_amount("  4200 ") == 4200
+
+
+def test_parse_amount_empty_raises():
+    with pytest.raises(ParseError, match="No amount"):
+        parse_amount("")
+
+
+def test_parse_amount_two_words_raises():
+    with pytest.raises(ParseError):
+        parse_amount("100 200")
+
+
+@pytest.mark.parametrize("bad", ["abc", "-50", "12.5", "1,500"])
+def test_parse_amount_rejects_non_whole_numbers(bad):
+    with pytest.raises(ParseError, match="whole number"):
+        parse_amount(bad)
+
+
+def test_parse_amount_zero_rejected_by_default():
+    with pytest.raises(ParseError, match="positive"):
+        parse_amount("0")
+
+
+def test_parse_amount_zero_allowed_when_asked():
+    assert parse_amount("0", allow_zero=True) == 0
