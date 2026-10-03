@@ -14,6 +14,24 @@ def connect(path):
             created_at TEXT NOT NULL
         )
     """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS wallet_checkpoints (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            amount INTEGER NOT NULL CHECK (amount >= 0)
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cash_in (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            amount INTEGER NOT NULL CHECK (amount > 0),
+            note TEXT
+        )
+    """)
+
     return conn
 
 
@@ -57,3 +75,34 @@ def delete_last(conn):
     conn.commit()
 
     return row
+
+def set_checkpoint(conn, amount, created_at=None):
+    if created_at is None:
+        created_at = datetime.now(timezone.utc)
+    conn.execute(
+        "INSERT INTO wallet_checkpoints (created_at, amount) VALUES (?, ?)",
+        (created_at.isoformat(), amount),
+    )
+    conn.commit()
+
+
+def latest_checkpoint(conn):
+    return conn.execute(
+        "SELECT * FROM wallet_checkpoints ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+
+def add_cash_in(conn, amount, note=None, created_at=None):
+    if created_at is None:
+        created_at = datetime.now(timezone.utc)
+    conn.execute(
+        "INSERT INTO cash_in (created_at, amount, note) VALUES (?, ?, ?)",
+        (created_at.isoformat(), amount, note),
+    )
+    conn.commit()
+
+def total_cash_in_since(conn, since):
+    row = conn.execute(
+        "SELECT SUM(amount) AS total FROM cash_in WHERE created_at > ?",
+        (since.isoformat(),),
+    ).fetchone()
+    return row["total"] if row["total"] is not None else 0

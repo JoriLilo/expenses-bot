@@ -88,3 +88,71 @@ def test_delete_last_removes_most_recent():
 def test_delete_last_on_empty_returns_none():
     conn = storage.connect(":memory:")
     assert storage.delete_last(conn) is None    
+
+
+def test_set_and_get_checkpoint():
+    conn = storage.connect(":memory:")
+    now = datetime.now(timezone.utc)
+    storage.set_checkpoint(conn, 4200, created_at=now)
+
+    cp = storage.latest_checkpoint(conn)
+
+    assert cp["amount"] == 4200
+    assert cp["created_at"] == now.isoformat()
+
+
+def test_latest_checkpoint_returns_most_recent():
+    conn = storage.connect(":memory:")
+    now = datetime.now(timezone.utc)
+    storage.set_checkpoint(conn, 4200, created_at=now - timedelta(days=3))
+    storage.set_checkpoint(conn, 3100, created_at=now)
+
+    assert storage.latest_checkpoint(conn)["amount"] == 3100
+
+
+def test_latest_checkpoint_empty_returns_none():
+    conn = storage.connect(":memory:")
+    assert storage.latest_checkpoint(conn) is None
+
+
+def test_checkpoint_rejects_negative():
+    conn = storage.connect(":memory:")
+    with pytest.raises(sqlite3.IntegrityError):
+        storage.set_checkpoint(conn, -1, created_at=datetime.now(timezone.utc))
+
+
+def test_checkpoint_allows_zero():
+    conn = storage.connect(":memory:")
+    storage.set_checkpoint(conn, 0)
+    assert storage.latest_checkpoint(conn)["amount"] == 0    
+
+
+def test_add_cash_in_and_total():
+    conn = storage.connect(":memory:")
+    now = datetime.now(timezone.utc)
+    storage.add_cash_in(conn, 5000, "salary", created_at=now)
+    storage.add_cash_in(conn, 1000, created_at=now)
+
+    assert storage.total_cash_in_since(conn, now - timedelta(days=1)) == 6000
+
+
+def test_cash_in_since_respects_window():
+    conn = storage.connect(":memory:")
+    now = datetime.now(timezone.utc)
+    storage.add_cash_in(conn, 9999, "old", created_at=now - timedelta(days=10))
+    storage.add_cash_in(conn, 500, "recent", created_at=now)
+
+    assert storage.total_cash_in_since(conn, now - timedelta(days=1)) == 500
+
+
+def test_cash_in_empty_returns_zero():
+    conn = storage.connect(":memory:")
+    assert storage.total_cash_in_since(conn, datetime.now(timezone.utc)) == 0
+
+
+def test_cash_in_rejects_zero_and_negative():
+    conn = storage.connect(":memory:")
+    with pytest.raises(sqlite3.IntegrityError):
+        storage.add_cash_in(conn, 0)
+    with pytest.raises(sqlite3.IntegrityError):
+        storage.add_cash_in(conn, -5)
