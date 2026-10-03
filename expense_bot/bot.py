@@ -1,5 +1,5 @@
 import os
-
+import logging 
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
@@ -13,6 +13,17 @@ load_dotenv()
 ALLOWED_USER_ID = int(os.environ["ALLOWED_USER_ID"])
 DB_PATH = os.environ.get("DB_PATH", "expenses.db")
 TIRANA = ZoneInfo("Europe/Belgrade")
+
+logger = logging.getLogger(__name__)
+
+
+def setup_logging():
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        level=logging.INFO,
+    )
+    # httpx logs full request URLs at INFO, and Telegram URLs contain the bot token.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def is_owner(update: Update) -> bool:
@@ -121,7 +132,15 @@ async def on_undowallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reply)    
 
 
+
+async def on_error(update, context):
+    logger.error("Unhandled exception while handling an update", exc_info=context.error)
+    message = getattr(update, "effective_message", None)
+    if message is not None and is_owner(update):
+        await message.reply_text("Something went wrong. It's been logged.")
+
 def main():
+    setup_logging()
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     app = Application.builder().token(token).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
@@ -132,6 +151,7 @@ def main():
     app.add_handler(CommandHandler("recent", on_recent))
     app.add_handler(CommandHandler("undoin", on_undoin))
     app.add_handler(CommandHandler("undowallet", on_undowallet))
+    app.add_error_handler(on_error)
     app.run_polling()
 
 
