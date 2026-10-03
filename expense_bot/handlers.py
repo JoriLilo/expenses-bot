@@ -21,16 +21,32 @@ def undo_message(conn):
     return f"Removed: {removed['item']} - {removed['amount']} lek [{removed['category']}]"
 
 
+def _expected_wallet(conn):
+    """Cash the wallet should hold now, or None if there's no baseline yet."""
+    previous = storage.latest_checkpoint(conn)
+    if previous is None:
+        return None
+    since = datetime.fromisoformat(previous["created_at"])
+    spent = storage.total_since(conn, since)
+    received = storage.total_cash_in_since(conn, since)
+    return previous["amount"] + received - spent
+
+
 def today_message(conn, now):
     local_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start_utc = local_midnight.astimezone(timezone.utc)
 
     totals = storage.totals_by_category_since(conn, start_utc)
     if not totals:
-        return "Nothing logged today."
+        lines = ["Nothing logged today."]
+    else:
+        lines = [f"{category}: {amount} lek" for category, amount in totals.items()]
+        lines.append(f"Total: {sum(totals.values())} lek")
 
-    lines = [f"{category}: {amount} lek" for category, amount in totals.items()]
-    lines.append(f"Total: {sum(totals.values())} lek")
+    expected = _expected_wallet(conn)
+    if expected is not None:
+        lines.append(f"Wallet: {expected} lek left (expected)")
+
     return "\n".join(lines)
 
 
@@ -53,27 +69,18 @@ def wallet_message(conn, text, now=None):
     if now is None:
         now = datetime.now(timezone.utc)
 
-    previous = storage.latest_checkpoint(conn)
-    if previous is None:
+    expected = _expected_wallet(conn)
+    if expected is None:
         storage.set_checkpoint(conn, actual, now)
         return f"Baseline saved: {actual} lek"
 
-    since = datetime.fromisoformat(previous["created_at"])
-    spent = storage.total_since(conn, since)
-    received = storage.total_cash_in_since(conn, since)
-    expected = previous["amount"] + received - spent
+
     gap = expected - actual
 
     storage.set_checkpoint(conn, actual, now)
 
     if gap == 0:
-        return (
-            f"Matches. Expected {expected} lek, actual {actual} lek."
-        )
+        return f"Matches. Expected {expected} lek, actual {actual} lek."
     if gap > 0:
-        return (
-            f"Missing {gap} lek. Expected {expected} lek, actual {actual} lek."
-        )
-    return (
-        f"{-gap} lek more than expected. Expected {expected} lek, actual {actual} lek."
-    )
+        return f"Missing {gap} lek. Expected {expected} lek, actual {actual} lek."
+    return f"{-gap} lek more than expected. Expected {expected} lek, actual {actual} lek."

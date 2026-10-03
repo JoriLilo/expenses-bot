@@ -160,3 +160,29 @@ def test_in_bad_input_stores_nothing():
         reply = handlers.in_message(conn, bad)
         assert reply.startswith("Couldn't log that:")
     assert storage.total_cash_in_since(conn, EPOCH) == 0
+
+def test_today_shows_expected_wallet_since_checkpoint():
+    conn = storage.connect(":memory:")
+    now = datetime(2026, 10, 1, 9, 0, tzinfo=TIRANA)
+    storage.set_checkpoint(conn, 5000, created_at=datetime(2026, 9, 30, 10, 0, tzinfo=timezone.utc))
+    storage.add_cash_in(conn, 1000, created_at=datetime(2026, 9, 30, 12, 0, tzinfo=timezone.utc))
+    # yesterday: not in today's list, but still leaves the wallet
+    storage.add_expense(conn, "dinner", 300, "food",
+                        created_at=datetime(2026, 9, 30, 15, 0, tzinfo=timezone.utc))
+    # today
+    storage.add_expense(conn, "coffee", 150, "food",
+                        created_at=datetime(2026, 10, 1, 6, 0, tzinfo=timezone.utc))
+
+    reply = handlers.today_message(conn, now)
+
+    assert reply == "food: 150 lek\nTotal: 150 lek\nWallet: 5550 lek left (expected)"
+
+
+def test_today_empty_still_shows_wallet():
+    conn = storage.connect(":memory:")
+    now = datetime(2026, 10, 1, 9, 0, tzinfo=TIRANA)
+    storage.set_checkpoint(conn, 5000, created_at=datetime(2026, 9, 30, 10, 0, tzinfo=timezone.utc))
+
+    reply = handlers.today_message(conn, now)
+
+    assert reply == "Nothing logged today.\nWallet: 5000 lek left (expected)"

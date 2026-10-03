@@ -57,12 +57,40 @@ async def on_today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reply)
 
 
+async def on_wallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update) or update.message is None:
+        return
+
+    conn = storage.connect(DB_PATH)
+    try:
+        reply = handlers.wallet_message(conn, " ".join(context.args))
+    finally:
+        conn.close()
+
+    await update.message.reply_text(reply)
+
+
+async def on_in(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update) or update.message is None:
+        return
+
+    conn = storage.connect(DB_PATH)
+    try:
+        reply = handlers.in_message(conn, " ".join(context.args))
+    finally:
+        conn.close()
+
+    await update.message.reply_text(reply)    
+
+
 def main():
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     app = Application.builder().token(token).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     app.add_handler(CommandHandler("undo", on_undo))
     app.add_handler(CommandHandler("today", on_today))
+    app.add_handler(CommandHandler("wallet", on_wallet))
+    app.add_handler(CommandHandler("in", on_in))
     app.run_polling()
 
 
