@@ -1,5 +1,5 @@
 from expense_bot import handlers, storage
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 TIRANA = ZoneInfo("Europe/Belgrade")
@@ -62,3 +62,101 @@ def test_today_empty():
     conn = storage.connect(":memory:")
     now = datetime(2026, 10, 1, 9, 0, tzinfo=TIRANA)
     assert handlers.today_message(conn, now) == "Nothing logged today."
+
+
+BASE = datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc)
+EPOCH = datetime(2000, 1, 1, tzinfo=timezone.utc)
+
+
+def test_wallet_first_check_saves_baseline_only():
+    conn = storage.connect(":memory:")
+
+    reply = handlers.wallet_message(conn, "4200", now=BASE)
+
+    assert "Baseline saved: 4200" in reply
+    assert storage.latest_checkpoint(conn)["amount"] == 4200
+
+
+def test_wallet_accepts_zero():
+    conn = storage.connect(":memory:")
+    handlers.wallet_message(conn, "0", now=BASE)
+    assert storage.latest_checkpoint(conn)["amount"] == 0
+
+
+def test_wallet_exact_match():
+    conn = storage.connect(":memory:")
+    storage.set_checkpoint(conn, 5000, created_at=BASE)
+    storage.add_expense(conn, "lunch", 200, "food", created_at=BASE + timedelta(hours=1))
+    storage.add_cash_in(conn, 1000, created_at=BASE + timedelta(hours=2))
+
+    reply = handlers.wallet_message(conn, "5800", now=BASE + timedelta(hours=3))
+
+    assert "Matches" in reply
+
+
+def test_wallet_positive_gap_means_unlogged_spending():
+    conn = storage.connect(":memory:")
+    storage.set_checkpoint(conn, 5000, created_at=BASE)
+    storage.add_expense(conn, "lunch", 200, "food", created_at=BASE + timedelta(hours=1))
+
+    reply = handlers.wallet_message(conn, "4500", now=BASE + timedelta(hours=3))
+
+    assert "Missing 300 lek" in reply
+
+
+def test_wallet_negative_gap_means_unlogged_cash_in():
+    conn = storage.connect(":memory:")
+    storage.set_checkpoint(conn, 5000, created_at=BASE)
+
+    reply = handlers.wallet_message(conn, "5500", now=BASE + timedelta(hours=3))
+
+    assert "500 lek more than expected" in reply
+
+
+def test_wallet_ignores_entries_before_checkpoint():
+    conn = storage.connect(":memory:")
+    storage.add_expense(conn, "old", 999, "food", created_at=BASE - timedelta(hours=1))
+    storage.add_cash_in(conn, 777, created_at=BASE - timedelta(hours=2))
+    storage.set_checkpoint(conn, 5000, created_at=BASE)
+
+    reply = handlers.wallet_message(conn, "5000", now=BASE + timedelta(hours=3))
+
+    assert "Matches" in reply
+
+
+def test_wallet_each_check_becomes_new_baseline():
+    conn = storage.connect(":memory:")
+    storage.set_checkpoint(conn, 5000, created_at=BASE)
+    storage.add_expense(conn, "lunch", 200, "food", created_at=BASE + timedelta(hours=1))
+    handlers.wallet_message(conn, "4800", now=BASE + timedelta(hours=2))
+    storage.add_expense(conn, "coffee", 100, "food", created_at=BASE + timedelta(hours=3))
+
+    reply = handlers.wallet_message(conn, "4700", now=BASE + timedelta(hours=4))
+
+    assert "Matches" in reply
+    assert storage.latest_checkpoint(conn)["amount"] == 4700
+
+
+def test_wallet_bad_input_stores_nothing():
+    conn = storage.connect(":memory:")
+    for bad in ["abc", "-5", "12.5", ""]:
+        reply = handlers.wallet_message(conn, bad, now=BASE)
+        assert reply.startswith("Couldn't read that:")
+    assert storage.latest_checkpoint(conn) is None
+
+
+def test_in_stores_and_confirms():
+    conn = storage.connect(":memory:")
+
+    reply = handlers.in_message(conn, "5000")
+
+    assert reply == "Cash in: 5000 lek"
+    assert storage.total_cash_in_since(conn, EPOCH) == 5000
+
+
+def test_in_bad_input_stores_nothing():
+    conn = storage.connect(":memory:")
+    for bad in ["abc", "0", "-5", ""]:
+        reply = handlers.in_message(conn, bad)
+        assert reply.startswith("Couldn't log that:")
+    assert storage.total_cash_in_since(conn, EPOCH) == 0
