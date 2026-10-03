@@ -106,3 +106,37 @@ def total_cash_in_since(conn, since):
         (since.isoformat(),),
     ).fetchone()
     return row["total"] if row["total"] is not None else 0
+
+
+def delete_last_cash_in(conn):
+    row = conn.execute(
+        "SELECT id, amount, note, created_at FROM cash_in ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    if row is None:
+        return None
+    conn.execute("DELETE FROM cash_in WHERE id = ?", (row["id"],))
+    conn.commit()
+    return row
+
+
+def delete_last_checkpoint(conn):
+    row = conn.execute(
+        "SELECT id, amount, created_at FROM wallet_checkpoints ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    if row is None:
+        return None
+    conn.execute("DELETE FROM wallet_checkpoints WHERE id = ?", (row["id"],))
+    conn.commit()
+    return row
+
+
+def recent_activity(conn, limit=10):
+    return conn.execute("""
+        SELECT 'expense' AS kind, amount, item AS label, created_at FROM expenses
+        UNION ALL
+        SELECT 'cash_in', amount, COALESCE(note, ''), created_at FROM cash_in
+        UNION ALL
+        SELECT 'wallet', amount, '', created_at FROM wallet_checkpoints
+        ORDER BY created_at DESC
+        LIMIT ?
+    """, (limit,)).fetchall()

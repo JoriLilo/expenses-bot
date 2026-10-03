@@ -84,3 +84,46 @@ def wallet_message(conn, text, now=None):
     if gap > 0:
         return f"Missing {gap} lek. Expected {expected} lek, actual {actual} lek."
     return f"{-gap} lek more than expected. Expected {expected} lek, actual {actual} lek."
+
+
+def undo_in_message(conn):
+    removed = storage.delete_last_cash_in(conn)
+    if removed is None:
+        return "No cash-in to undo."
+    return f"Removed cash in: {removed['amount']} lek"
+
+
+def undo_wallet_message(conn):
+    removed = storage.delete_last_checkpoint(conn)
+    if removed is None:
+        return "No wallet count to undo."
+
+    previous = storage.latest_checkpoint(conn)
+    if previous is None:
+        return (
+            f"Removed wallet count: {removed['amount']} lek. "
+            f"No baseline left; your next /wallet starts a new one."
+        )
+    return (
+        f"Removed wallet count: {removed['amount']} lek. "
+        f"Last count is now {previous['amount']} lek."
+    )
+
+
+def recent_message(conn, now):
+    rows = storage.recent_activity(conn)
+    if not rows:
+        return "Nothing logged yet."
+
+    lines = []
+    for row in rows:
+        when = datetime.fromisoformat(row["created_at"]).astimezone(now.tzinfo)
+        stamp = when.strftime("%d %b %H:%M")
+        if row["kind"] == "expense":
+            lines.append(f"{stamp}  -{row['amount']} {row['label']}")
+        elif row["kind"] == "cash_in":
+            note = f" ({row['label']})" if row["label"] else ""
+            lines.append(f"{stamp}  +{row['amount']} cash in{note}")
+        else:
+            lines.append(f"{stamp}  = {row['amount']} wallet count")
+    return "\n".join(lines)

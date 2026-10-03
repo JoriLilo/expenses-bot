@@ -80,6 +80,44 @@ async def on_in(update: Update, context: ContextTypes.DEFAULT_TYPE):
     finally:
         conn.close()
 
+    await update.message.reply_text(reply)
+
+async def on_recent(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update) or update.message is None:
+        return
+
+    conn = storage.connect(DB_PATH)
+    try:
+        reply = handlers.recent_message(conn, datetime.now(TIRANA))
+    finally:
+        conn.close()
+
+    await update.message.reply_text(reply)
+
+
+async def on_undoin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update) or update.message is None:
+        return
+
+    conn = storage.connect(DB_PATH)
+    try:
+        reply = handlers.undo_in_message(conn)
+    finally:
+        conn.close()
+
+    await update.message.reply_text(reply)
+
+
+async def on_undowallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update) or update.message is None:
+        return
+
+    conn = storage.connect(DB_PATH)
+    try:
+        reply = handlers.undo_wallet_message(conn)
+    finally:
+        conn.close()
+
     await update.message.reply_text(reply)    
 
 
@@ -91,6 +129,9 @@ def main():
     app.add_handler(CommandHandler("today", on_today))
     app.add_handler(CommandHandler("wallet", on_wallet))
     app.add_handler(CommandHandler("in", on_in))
+    app.add_handler(CommandHandler("recent", on_recent))
+    app.add_handler(CommandHandler("undoin", on_undoin))
+    app.add_handler(CommandHandler("undowallet", on_undowallet))
     app.run_polling()
 
 

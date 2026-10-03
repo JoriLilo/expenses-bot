@@ -186,3 +186,79 @@ def test_today_empty_still_shows_wallet():
     reply = handlers.today_message(conn, now)
 
     assert reply == "Nothing logged today.\nWallet: 5000 lek left (expected)"
+
+
+def test_undo_in_removes_last_and_says_what():
+    conn = storage.connect(":memory:")
+    handlers.in_message(conn, "500")
+    handlers.in_message(conn, "5000")
+
+    reply = handlers.undo_in_message(conn)
+
+    assert reply == "Removed cash in: 5000 lek"
+
+
+def test_undo_in_on_empty():
+    conn = storage.connect(":memory:")
+    assert handlers.undo_in_message(conn) == "No cash-in to undo."
+
+
+def test_undo_wallet_reverts_to_previous_count():
+    conn = storage.connect(":memory:")
+    storage.set_checkpoint(conn, 5000, created_at=BASE)
+    storage.set_checkpoint(conn, 4200, created_at=BASE + timedelta(hours=1))
+
+    reply = handlers.undo_wallet_message(conn)
+
+    assert reply == "Removed wallet count: 4200 lek. Last count is now 5000 lek."
+
+
+def test_undo_wallet_first_count_leaves_no_baseline():
+    conn = storage.connect(":memory:")
+    storage.set_checkpoint(conn, 4200, created_at=BASE)
+
+    reply = handlers.undo_wallet_message(conn)
+
+    assert "No baseline left" in reply
+    assert storage.latest_checkpoint(conn) is None
+
+
+def test_undo_wallet_on_empty():
+    conn = storage.connect(":memory:")
+    assert handlers.undo_wallet_message(conn) == "No wallet count to undo."
+
+
+def test_wrong_wallet_count_can_be_undone_and_redone():
+    conn = storage.connect(":memory:")
+    storage.set_checkpoint(conn, 5000, created_at=BASE)
+    storage.add_expense(conn, "lunch", 200, "food", created_at=BASE + timedelta(hours=1))
+    # typo: meant 4800
+    assert "Missing 600 lek" in handlers.wallet_message(conn, "4200", now=BASE + timedelta(hours=2))
+
+    handlers.undo_wallet_message(conn)
+    reply = handlers.wallet_message(conn, "4800", now=BASE + timedelta(hours=3))
+
+    assert "Matches" in reply
+    assert storage.latest_checkpoint(conn)["amount"] == 4800
+
+
+def test_recent_lists_all_kinds_newest_first_in_local_time():
+    conn = storage.connect(":memory:")
+    now = datetime(2026, 10, 3, 20, 0, tzinfo=TIRANA)
+    storage.set_checkpoint(conn, 5000, created_at=BASE)
+    storage.add_expense(conn, "coffee", 150, "food", created_at=BASE + timedelta(hours=1))
+    storage.add_cash_in(conn, 1000, "salary", created_at=BASE + timedelta(hours=2))
+
+    reply = handlers.recent_message(conn, now)
+
+    assert reply == (
+        "03 Oct 16:00  +1000 cash in (salary)\n"
+        "03 Oct 15:00  -150 coffee\n"
+        "03 Oct 14:00  = 5000 wallet count"
+    )
+
+
+def test_recent_empty():
+    conn = storage.connect(":memory:")
+    now = datetime(2026, 10, 3, 20, 0, tzinfo=TIRANA)
+    assert handlers.recent_message(conn, now) == "Nothing logged yet."    
