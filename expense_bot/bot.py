@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 load_dotenv()
 ALLOWED_USER_ID = int(os.environ["ALLOWED_USER_ID"])
 DB_PATH = os.environ.get("DB_PATH", "expenses.db")
-TIRANA = ZoneInfo("Europe/Belgrade")
+TIRANA = ZoneInfo("Europe/Tirane")
 
 logger = logging.getLogger(__name__)
 

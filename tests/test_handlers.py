@@ -2,7 +2,7 @@ from expense_bot import handlers, storage
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-TIRANA = ZoneInfo("Europe/Belgrade")
+TIRANA = ZoneInfo("Europe/Tirane")
 
 def test_log_message_stores_expense_and_confirms():
     conn = storage.connect(":memory:")

@@ -59,8 +59,6 @@ def parse_amount(text, allow_zero=False):
     if not text.isdecimal():
         raise ParseError("Amount must be a whole number. Try 150")
     amount = int(text)
-    if amount <= 0 and not allow_zero:
-        raise ParseError("Amount must be a positive number.")
     if amount == 0 and not allow_zero:
         raise ParseError("Amount must be a positive number.")
 
