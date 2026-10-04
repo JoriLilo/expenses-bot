@@ -1,5 +1,7 @@
 FROM python:3.14-slim
 
+LABEL org.opencontainers.image.source="https://github.com/JoriLilo/expenses-bot"
+
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
