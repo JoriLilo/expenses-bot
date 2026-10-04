@@ -131,6 +131,18 @@ async def on_undowallet(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(reply)    
 
+async def on_week(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner(update) or update.message is None:
+        return
+
+    conn = storage.connect(DB_PATH)
+    try:
+        reply = handlers.week_message(conn, datetime.now(TIRANA))
+    finally:
+        conn.close()
+
+    await update.message.reply_text(reply)
+
 
 
 async def on_error(update, context):
@@ -151,6 +163,7 @@ def main():
     app.add_handler(CommandHandler("recent", on_recent))
     app.add_handler(CommandHandler("undoin", on_undoin))
     app.add_handler(CommandHandler("undowallet", on_undowallet))
+    app.add_handler(CommandHandler("week", on_week))
     app.add_error_handler(on_error)
     app.run_polling()
 

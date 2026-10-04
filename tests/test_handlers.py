@@ -262,3 +262,70 @@ def test_recent_empty():
     conn = storage.connect(":memory:")
     now = datetime(2026, 10, 3, 20, 0, tzinfo=TIRANA)
     assert handlers.recent_message(conn, now) == "Nothing logged yet."    
+
+
+def utc(*args):
+    return datetime(*args, tzinfo=timezone.utc)
+
+
+def test_week_groups_by_category_and_compares_with_previous_week():
+    conn = storage.connect(":memory:")
+    now = datetime(2026, 10, 4, 15, 0, tzinfo=TIRANA)  # window starts Sep 28 00:00 local
+    # this week
+    storage.add_expense(conn, "groceries", 1000, "food", created_at=utc(2026, 10, 3, 10, 0))
+    storage.add_expense(conn, "lunch", 200, "food", created_at=utc(2026, 10, 4, 6, 0))
+    storage.add_expense(conn, "bus", 500, "transport", created_at=utc(2026, 9, 27, 22, 0))  # exactly local midnight
+    # previous 7 days
+    storage.add_expense(conn, "shoes", 1000, "other", created_at=utc(2026, 9, 25, 10, 0))
+    storage.add_expense(conn, "snack", 300, "food", created_at=utc(2026, 9, 27, 21, 59))  # one minute too early
+    # older than both windows
+    storage.add_expense(conn, "ancient", 999, "other", created_at=utc(2026, 9, 20, 21, 59))
+
+    reply = handlers.week_message(conn, now)
+
+    assert reply == (
+        "food: 1200 lek\n"
+        "transport: 500 lek\n"
+        "Total: 1700 lek\n"
+        "Previous 7 days: 1300 lek (+400)"
+    )
+
+
+def test_week_empty():
+    conn = storage.connect(":memory:")
+    now = datetime(2026, 10, 4, 15, 0, tzinfo=TIRANA)
+
+    assert handlers.week_message(conn, now) == "Nothing logged in the last 7 days."
+
+
+def test_week_with_nothing_in_previous_week():
+    conn = storage.connect(":memory:")
+    now = datetime(2026, 10, 4, 15, 0, tzinfo=TIRANA)
+    storage.add_expense(conn, "bus", 500, "transport", created_at=utc(2026, 10, 3, 10, 0))
+
+    reply = handlers.week_message(conn, now)
+
+    assert reply == "transport: 500 lek\nTotal: 500 lek\nPrevious 7 days: nothing logged"
+
+
+def test_week_with_nothing_this_week_but_something_before():
+    conn = storage.connect(":memory:")
+    now = datetime(2026, 10, 4, 15, 0, tzinfo=TIRANA)
+    storage.add_expense(conn, "shoes", 1300, "other", created_at=utc(2026, 9, 25, 10, 0))
+
+    reply = handlers.week_message(conn, now)
+
+    assert reply == "Nothing logged in the last 7 days.\nPrevious 7 days: 1300 lek (-1300)"
+
+
+def test_week_starts_at_local_midnight_even_across_a_clock_change():
+    conn = storage.connect(":memory:")
+    # Albania moves its clocks on Oct 25, 2026. On Oct 28 the offset is +01:00,
+    # but the window starts on Oct 22, local midnight, which was still +02:00.
+    now = datetime(2026, 10, 28, 12, 0, tzinfo=TIRANA)
+    storage.add_expense(conn, "inside", 100, "food", created_at=utc(2026, 10, 21, 22, 0))
+    storage.add_expense(conn, "outside", 50, "food", created_at=utc(2026, 10, 21, 21, 59))
+
+    reply = handlers.week_message(conn, now)
+
+    assert reply == "food: 100 lek\nTotal: 100 lek\nPrevious 7 days: 50 lek (+50)"    

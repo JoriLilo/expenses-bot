@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from . import storage
 from .parser import ParseError, parse_amount, parse_expense
@@ -126,4 +126,31 @@ def recent_message(conn, now):
             lines.append(f"{stamp}  +{row['amount']} cash in{note}")
         else:
             lines.append(f"{stamp}  = {row['amount']} wallet count")
+    return "\n".join(lines)
+
+
+def week_message(conn, now):
+    today_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start = today_midnight - timedelta(days=6)
+    previous_start = start - timedelta(days=7)
+    start_utc = start.astimezone(timezone.utc)
+    previous_start_utc = previous_start.astimezone(timezone.utc)
+
+    totals = storage.totals_by_category_since(conn, start_utc)
+    this_total = sum(totals.values())
+    previous_total = (
+        storage.total_since(conn, previous_start_utc) - storage.total_since(conn, start_utc)
+    )
+
+    if not totals:
+        lines = ["Nothing logged in the last 7 days."]
+    else:
+        lines = [f"{category}: {amount} lek" for category, amount in totals.items()]
+        lines.append(f"Total: {this_total} lek")
+
+    if previous_total > 0:
+        lines.append(f"Previous 7 days: {previous_total} lek ({this_total - previous_total:+d})")
+    elif totals:
+        lines.append("Previous 7 days: nothing logged")
+
     return "\n".join(lines)

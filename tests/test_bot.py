@@ -49,7 +49,7 @@ def test_is_owner_rejects_update_without_user():
 
 @pytest.mark.parametrize("name", [
     "on_text", "on_undo", "on_today", "on_wallet",
-    "on_in", "on_recent", "on_undoin", "on_undowallet",
+    "on_in", "on_recent", "on_undoin", "on_undowallet", "on_week",
 ])
 def test_stranger_gets_no_reply_and_touches_no_data(name):
     update = make_update(STRANGER, "coffee 150")

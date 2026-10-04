@@ -45,7 +45,7 @@ def test_main_wires_logging_commands_and_error_handler(monkeypatch):
         if isinstance(handler, CommandHandler)
         for name in handler.commands
     }
-    assert commands == {"undo", "today", "wallet", "in", "recent", "undoin", "undowallet"}
+    assert commands == {"undo", "today", "wallet", "in", "recent", "undoin", "undowallet", "week"}
     assert any(isinstance(h, MessageHandler) for h in app.handlers)
     assert app.error_handlers == [bot.on_error]
     assert logging_calls == [True]
