@@ -50,7 +50,7 @@ tests/         pytest suite covering all five modules
 
 The handlers return plain strings, so the business logic is tested without a network connection or a Telegram account. The code was written test-first: each behavior began as a failing test, including the edge cases (empty tables, the local-midnight boundary, entries before a checkpoint being ignored, wrong input storing nothing).
 
-Every push to `main` runs GitHub Actions: the test suite first, then a build of the Docker image with a smoke test of the result.
+Every push to `main` runs GitHub Actions in three stages: the test suite, then a build of the Docker image with a smoke test of the result, then a job that publishes the image to GitHub Container Registry (`ghcr.io/jorililo/expenses-bot`) tagged `latest` and with the commit SHA. Pull requests run the first two stages but never publish.
 
 ## Security
 
@@ -58,6 +58,8 @@ Every push to `main` runs GitHub Actions: the test suite first, then a build of 
 - The bot token and user ID come from environment variables. `.env` is git-ignored and excluded from the Docker build context, and the image contains no secrets.
 - Logging keeps the `httpx` logger at WARNING, because its INFO logs print request URLs and Telegram URLs contain the bot token. A test pins this.
 - An unexpected exception is logged with a full traceback and the owner gets "Something went wrong" instead of silence.
+- The container runs as a non-root user. The published image is public and contains only the application code and its dependencies, with no secrets.
+- On the server, the only open inbound port is SSH, restricted to a single address. The bot itself only makes outbound connections to Telegram (long polling), so it needs no inbound port.
 
 ## Run it
 
@@ -90,6 +92,23 @@ docker run --rm --env-file .env -v expenses-data:/data expenses-bot
 
 The database lives at `/data/expenses.db` inside the container, on a named volume, so it survives restarts and image rebuilds. Secrets are passed at run time and never copied into the image. Run only one instance per token: two programs polling Telegram with the same token will fight over updates.
 
+### Deployment
+
+The bot runs on a single small AWS EC2 instance (t3.micro, Amazon Linux 2023, Stockholm region) as a Docker container. The server pulls the public image that CI publishes, so nothing is built on the server:
+
+```bash
+docker pull ghcr.io/jorililo/expenses-bot:latest
+docker run -d --name expenses-bot --restart unless-stopped \
+  --env-file ~/expenses-bot.env \
+  -v ~/data:/data \
+  ghcr.io/jorililo/expenses-bot:latest
+```
+
+- `--restart unless-stopped` brings the bot back after a crash or a server reboot.
+- The database is a normal file in `~/data` on the instance's disk, mounted into the container at `/data`, which keeps backups simple.
+- The env file holding the token and user ID is created by hand on the server with owner-only permissions. It is never in the repository, the image or the CI configuration.
+- To update: pull the new image, remove the old container (`docker stop expenses-bot && docker rm expenses-bot`), and run the command above again. The database is untouched because it lives outside the container.
+
 ### Backups
 
 ```bash
@@ -104,5 +123,6 @@ This writes a timestamped copy to `backups/` using SQLite's backup API, so the s
 - **Whole numbers only.** Amounts are integers in lek, and the parser rejects decimals and thousands separators instead of guessing.
 - **Undo removes only the latest entry.** Editing arbitrary history would make the numbers untrustworthy. Because every `/wallet` count resets the baseline, an old mistake can only distort the one interval it happened in.
 - **Single user.** The bot is built for one person's wallet.
-- **Not hosted.** It runs while the process or container runs, which today means on my own machine.
+- **One small server, no redundancy.** If the instance is down, the bot is down. Deploys are manual: CI publishes the image and I pull it on the server. Backups are a script I run, not yet a scheduled job.
+- **Late messages get late timestamps.** Entries are stamped when the bot processes a message, not when I sent it, so anything sent while the bot was offline is logged at the time it came back.
 - **Timestamps** are stored in UTC and converted to Tirana time for display and for the "today" boundary.
